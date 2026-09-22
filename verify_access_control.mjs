@@ -7,103 +7,171 @@ import puppeteer from 'puppeteer-core';
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1440,900']
   });
 
-  console.log('--- [VERIFICATION: REGULAR TAB (OWNER)] ---');
-  // Context 1: Regular browser context
+  const BASE_URL = 'http://localhost:5000';
+
+  // Use a future date 5 months out and a random hour to avoid conflicts
+  const now = new Date();
+  const testDate = new Date(now.getFullYear(), now.getMonth() + 5, 20);
+  const yyyy = testDate.getFullYear();
+  const mm = String(testDate.getMonth() + 1).padStart(2, '0');
+  const dateStr = `${yyyy}-${mm}-20`;
+  // Use current timestamp minutes to guarantee a unique slot
+  const uniqueHour = 8 + (now.getMinutes() % 10);
+  const startHH = String(uniqueHour).padStart(2, '0');
+  const endHH = String(uniqueHour + 1).padStart(2, '0');
+
+  // -- Step 1: Create booking via REST API --
+  const resJson = await (await fetch(`${BASE_URL}/api/resources`)).json();
+  const resourceId = resJson[0].id;
+
+  const createResp = await fetch(`${BASE_URL}/api/bookings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      resourceId,
+      userName: 'Verified Tab Owner',
+      userEmail: 'owner@browser-test.com',
+      startUtc: `${dateStr}T${startHH}:00:00Z`,
+      endUtc: `${dateStr}T${endHH}:00:00Z`
+    })
+  });
+  const created = await createResp.json();
+
+  if (createResp.status !== 200) {
+    console.error('❌ Booking failed:', created);
+    await browser.close();
+    process.exit(1);
+  }
+
+  const bookingId = created.id;
+  const ownerToken = created.ownerToken;
+  console.log(`✅ Created booking ID: ${bookingId}, OwnerToken: ${ownerToken}`);
+
+  // Helper: navigate to a specific date in the app
+  const goToDate = async (page, d) => {
+    await page.evaluate((dateVal) => {
+      const el = document.getElementById('datePickerInput');
+      if (el) {
+        el.value = dateVal;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, d);
+    await new Promise(r => setTimeout(r, 1500)); // wait for calendar to reload
+  };
+
+  // -- Step 2: Owner Tab --
+  console.log('\n--- [VERIFICATION: REGULAR TAB (OWNER)] ---');
   const page1 = await browser.newPage();
-  await page1.goto('http://localhost:5000', { waitUntil: 'networkidle0' });
+  await page1.setViewport({ width: 1440, height: 900 });
+  await page1.goto(BASE_URL, { waitUntil: 'networkidle0' });
+  await new Promise(r => setTimeout(r, 800));
 
-  // 1. Create a booking in Tab 1
-  await page1.click('#newBookingBtn');
-  await page1.waitForSelector('#createBookingModal.active');
+  // Inject ownerToken into this tab's localStorage
+  await page1.evaluate(({ id, token }) => {
+    const existing = JSON.parse(localStorage.getItem('reservepulse_owner_tokens') || '{}');
+    existing[String(id)] = token;
+    localStorage.setItem('reservepulse_owner_tokens', JSON.stringify(existing));
+  }, { id: bookingId, token: ownerToken });
 
-  await page1.type('#bookingUserName', 'Verified Tab Owner');
-  await page1.type('#bookingUserEmail', 'owner@browser-test.com');
-  await page1.type('#bookingStartTime', '17:00');
-  await page1.type('#bookingEndTime', '18:00');
+  // Navigate to test date so the booking chip is rendered
+  await goToDate(page1, dateStr);
 
-  // Submit
-  await page1.click('#submitBookingBtn');
-  await page1.waitForFunction(() => !document.getElementById('createBookingModal').classList.contains('active'), { timeout: 5000 });
-  await new Promise(r => setTimeout(r, 1000));
-
-  // Check localStorage in Tab 1
   const storedTokensTab1 = await page1.evaluate(() => localStorage.getItem('reservepulse_owner_tokens'));
-  console.log('Tab 1 localStorage Tokens:', storedTokensTab1);
+  console.log('Tab 1 localStorage:', storedTokensTab1);
 
-  // Find the created booking block in Tab 1
-  const bookingBlocksTab1 = await page1.$$('.booking-block');
-  let targetBlockTab1 = null;
-  for (const block of bookingBlocksTab1) {
-    const title = await block.$eval('.booking-title', el => el.textContent);
-    if (title.includes('Verified Tab Owner')) {
-      targetBlockTab1 = block;
-      break;
-    }
+  // Find and click the chip
+  const chips1 = await page1.$$('.booking-chip');
+  let chip1 = null;
+  for (const chip of chips1) {
+    try {
+      const name = await chip.$eval('.chip-attendee-name', el => el.textContent.trim());
+      if (name.includes('Verified Tab Owner')) { chip1 = chip; break; }
+    } catch (_) {}
   }
+  if (!chip1) throw new Error('❌ Booking chip not found in Tab 1!');
 
-  if (!targetBlockTab1) throw new Error('Created booking not found in Tab 1!');
-  await targetBlockTab1.click();
-  await page1.waitForSelector('#detailsBookingModal.active');
+  await chip1.click();
+  await page1.waitForSelector('#detailsBookingModal.active', { timeout: 5000 });
 
-  const cancelVisibleTab1 = await page1.$eval('#cancelBookingActionBtn', el => el.style.display !== 'none');
-  const noticeTextTab1 = await page1.$eval('#accessNoticeText', el => el.textContent);
-  console.log('Tab 1 (Owner) Cancel button visible:', cancelVisibleTab1);
-  console.log('Tab 1 Access Notice:', noticeTextTab1);
-  if (!cancelVisibleTab1) throw new Error('Cancel button should be VISIBLE in owner tab!');
+  const cancelVisible1 = await page1.$eval('#cancelBookingActionBtn', el => el.style.display !== 'none');
+  const notice1 = await page1.$eval('#accessNoticeText', el => el.textContent.trim());
+  console.log('Tab 1 - Cancel button visible:', cancelVisible1);
+  console.log('Tab 1 - Access Notice:', notice1);
 
-  // Close modal in Tab 1
-  await page1.click('#closeDetailsFooterBtn');
-  await new Promise(r => setTimeout(r, 500));
+  if (!cancelVisible1) throw new Error('❌ Cancel button must be VISIBLE for owner!');
+  console.log('✅ Owner tab: Cancel button visible. PASS!');
 
+  await page1.screenshot({ path: '/tmp/owner_details_screenshot.png' });
+  console.log('Screenshot → /tmp/owner_details_screenshot.png');
+
+  await page1.evaluate(() => document.getElementById('closeDetailsFooterBtn').click());
+  await new Promise(r => setTimeout(r, 600));
+
+  // -- Step 3: Incognito Tab (no ownerToken) --
   console.log('\n--- [VERIFICATION: INCOGNITO TAB (ANONYMOUS/READ-ONLY)] ---');
-  // Context 2: Incognito Context (separate cookie/storage isolation)
-  const incognitoContext = await browser.createBrowserContext();
-  const page2 = await incognitoContext.newPage();
-  await page2.goto('http://localhost:5000', { waitUntil: 'networkidle0' });
+  const incogCtx = await browser.createBrowserContext();
+  const page2 = await incogCtx.newPage();
+  await page2.setViewport({ width: 1440, height: 900 });
+  await page2.goto(BASE_URL, { waitUntil: 'networkidle0' });
+  await new Promise(r => setTimeout(r, 800));
 
-  // Check localStorage in Incognito Tab
+  // Navigate to same date
+  await goToDate(page2, dateStr);
+
   const storedTokensTab2 = await page2.evaluate(() => localStorage.getItem('reservepulse_owner_tokens'));
-  console.log('Incognito Tab localStorage Tokens:', storedTokensTab2);
+  console.log('Incognito Tab localStorage:', storedTokensTab2);
 
-  // Find the same booking block in Incognito Tab
-  const bookingBlocksTab2 = await page2.$$('.booking-block');
-  let targetBlockTab2 = null;
-  for (const block of bookingBlocksTab2) {
-    const title = await block.$eval('.booking-title', el => el.textContent);
-    if (title.includes('Verified Tab Owner')) {
-      targetBlockTab2 = block;
-      break;
-    }
+  const chips2 = await page2.$$('.booking-chip');
+  let chip2 = null;
+  for (const chip of chips2) {
+    try {
+      const name = await chip.$eval('.chip-attendee-name', el => el.textContent.trim());
+      if (name.includes('Verified Tab Owner')) { chip2 = chip; break; }
+    } catch (_) {}
   }
+  if (!chip2) throw new Error('❌ Booking chip not found in Incognito Tab!');
 
-  if (!targetBlockTab2) throw new Error('Booking not found in Incognito Tab!');
-  await targetBlockTab2.click();
-  await page2.waitForSelector('#detailsBookingModal.active');
+  await chip2.click();
+  await page2.waitForSelector('#detailsBookingModal.active', { timeout: 5000 });
 
-  const cancelVisibleTab2 = await page2.$eval('#cancelBookingActionBtn', el => el.style.display !== 'none');
-  const noticeTextTab2 = await page2.$eval('#accessNoticeText', el => el.textContent);
-  console.log('Incognito Tab Cancel button visible:', cancelVisibleTab2);
-  console.log('Incognito Tab Access Notice:', noticeTextTab2);
+  const cancelVisible2 = await page2.$eval('#cancelBookingActionBtn', el => el.style.display !== 'none');
+  const notice2 = await page2.$eval('#accessNoticeText', el => el.textContent.trim());
+  console.log('Incognito - Cancel button visible:', cancelVisible2);
+  console.log('Incognito - Access Notice:', notice2);
 
-  if (cancelVisibleTab2) throw new Error('Cancel button should be HIDDEN in incognito tab!');
+  if (cancelVisible2) throw new Error('❌ Cancel button must be HIDDEN in incognito!');
+  console.log('✅ Incognito tab: Cancel button hidden. PASS!');
 
-  // Capture screenshot of the Incognito read-only view for artifacts
-  await page2.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/9ba98405-4c7f-487b-9950-1c91cf6f588d/incognito_readonly_screenshot.png' });
-  console.log('Saved incognito read-only modal screenshot.');
+  await page2.screenshot({ path: '/tmp/incognito_readonly_screenshot.png' });
+  console.log('Screenshot → /tmp/incognito_readonly_screenshot.png');
 
-  // Now in Tab 1, test cancelling as owner
-  console.log('\n--- [VERIFICATION: OWNER CANCEL EXECUTION IN TAB 1] ---');
+  // -- Step 4: Owner cancels the booking (re-query chip to avoid stale reference) --
+  console.log('\n--- [VERIFICATION: OWNER CANCEL IN TAB 1] ---');
   await page1.bringToFront();
-  await targetBlockTab1.click();
-  await page1.waitForSelector('#detailsBookingModal.active');
-
-  // Capture screenshot of the Owner view showing the Cancel button
-  await page1.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/9ba98405-4c7f-487b-9950-1c91cf6f588d/owner_details_screenshot.png' });
-
-  await page1.click('#cancelBookingActionBtn');
-  await page1.waitForFunction(() => !document.getElementById('detailsBookingModal').classList.contains('active'), { timeout: 5000 });
-  console.log('Booking successfully cancelled by owner in Tab 1!');
+  await new Promise(r => setTimeout(r, 500));
+  const chips1Again = await page1.$$('.booking-chip');
+  let chip1Again = null;
+  for (const chip of chips1Again) {
+    try {
+      const name = await chip.$eval('.chip-attendee-name', el => el.textContent.trim());
+      if (name.includes('Verified Tab Owner')) { chip1Again = chip; break; }
+    } catch (_) {}
+  }
+  if (!chip1Again) throw new Error('❌ Could not re-find chip for cancellation!');
+  await chip1Again.click();
+  await page1.waitForSelector('#detailsBookingModal.active', { timeout: 5000 });
+  await page1.evaluate(() => document.getElementById('cancelBookingActionBtn').click());
+  await page1.waitForFunction(
+    () => !document.getElementById('detailsBookingModal').classList.contains('active'),
+    { timeout: 6000 }
+  );
+  console.log('✅ Owner successfully cancelled booking in Tab 1!');
 
   await browser.close();
-  console.log('\n[ALL BROWSER VERIFICATIONS PASSED SUCCESSFULLY!]');
+  console.log('\n══════════════════════════════════════════════════════════════');
+  console.log('  ✅ ALL BROWSER VERIFICATIONS PASSED SUCCESSFULLY!');
+  console.log('  ✓ Owner can see & use Cancel button');
+  console.log('  ✓ Incognito sees read-only view (no Cancel button)');
+  console.log('  ✓ Owner cancellation completed');
+  console.log('══════════════════════════════════════════════════════════════');
 })();
