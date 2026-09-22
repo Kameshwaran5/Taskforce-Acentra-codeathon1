@@ -1,0 +1,28 @@
+# Build and compile output
+bin/
+obj/
+out/
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# User-specific and environment files
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary and test artifacts
+*.tmp
+*.log
