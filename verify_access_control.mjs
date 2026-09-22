@@ -15,10 +15,10 @@ import puppeteer from 'puppeteer-core';
   const yyyy = testDate.getFullYear();
   const mm = String(testDate.getMonth() + 1).padStart(2, '0');
   const dateStr = `${yyyy}-${mm}-20`;
-  // Use current timestamp minutes to guarantee a unique slot
-  const uniqueHour = 8 + (now.getMinutes() % 10);
-  const startHH = String(uniqueHour).padStart(2, '0');
-  const endHH = String(uniqueHour + 1).padStart(2, '0');
+  // Use a local time window guaranteed to fall within the 8 AM - 8 PM calendar grid in any timezone
+  const targetHour = 10 + (now.getMinutes() % 4);
+  const startLocal = new Date(`${dateStr}T${String(targetHour).padStart(2, '0')}:00:00`);
+  const endLocal = new Date(`${dateStr}T${String(targetHour + 1).padStart(2, '0')}:00:00`);
 
   // -- Step 1: Create booking via REST API --
   const resJson = await (await fetch(`${BASE_URL}/api/resources`)).json();
@@ -31,8 +31,8 @@ import puppeteer from 'puppeteer-core';
       resourceId,
       userName: 'Verified Tab Owner',
       userEmail: 'owner@browser-test.com',
-      startUtc: `${dateStr}T${startHH}:00:00Z`,
-      endUtc: `${dateStr}T${endHH}:00:00Z`
+      startUtc: startLocal.toISOString(),
+      endUtc: endLocal.toISOString()
     })
   });
   const created = await createResp.json();

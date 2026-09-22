@@ -788,10 +788,17 @@ async function runSimultaneousRaceConditionDemo() {
   laneA.className = 'race-terminal-card';
   laneB.className = 'race-terminal-card';
 
-  const now = new Date();
-  const randomMin = 15;
-  const startIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 14, randomMin, 0)).toISOString();
-  const endIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 15, randomMin, 0)).toISOString();
+  // Generate a fresh unique future window on every invocation to guarantee a pristine race
+  const testOffsetMin = Math.floor(Date.now() / 1000) % 50000;
+  const startTime = new Date(Date.now() + (30 * 86400000) + (testOffsetMin * 60000));
+  startTime.setSeconds(0, 0);
+  startTime.setMilliseconds(0);
+  const endTime = new Date(startTime.getTime() + (90 * 60000)); // 90 min window
+
+  const startIso = startTime.toISOString();
+  const endIso = endTime.toISOString();
+
+  document.getElementById('demoSlotTime').textContent = `${startTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${formatHourMinute(startTime)} – ${formatHourMinute(endTime)}`;
 
   const payloadA = {
     resourceId,

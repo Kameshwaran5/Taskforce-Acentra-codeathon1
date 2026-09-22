@@ -45,10 +45,12 @@ public static class DbSeeder
             await context.SaveChangesAsync();
 
             // Seed demo bookings for today so calendar has visible sample blocks
-            var todayUtc = DateTime.UtcNow.Date;
+            // Calculate today's local midnight converted to UTC so bookings appear at 9 AM, 10:30 AM, etc. in local time
+            var todayBaseUtc = DateTime.Today.ToUniversalTime();
             var apollo = resources.First(r => r.Name == "Conference Room Apollo");
             var horizon = resources.First(r => r.Name == "Boardroom Horizon");
             var lab = resources.First(r => r.Name == "IoT & Robotics Lab");
+            var rig = resources.First(r => r.Name == "4K Laser Presentation Rig");
 
             var sampleBookings = new List<Booking>
             {
@@ -57,20 +59,8 @@ public static class DbSeeder
                     ResourceId = apollo.Id,
                     UserName = "Sarah Connor",
                     UserEmail = "sarah.c@sky.net",
-                    StartUtc = todayUtc.AddHours(9).AddMinutes(0),
-                    EndUtc = todayUtc.AddHours(10).AddMinutes(30),
-                    Status = "Confirmed",
-                    Version = Guid.NewGuid(),
-                    OwnerToken = Guid.NewGuid(),
-                    CreatedUtc = DateTime.UtcNow
-                },
-                new()
-                {
-                    ResourceId = apollo.Id,
-                    UserName = "Alex Rivera",
-                    UserEmail = "alex.r@venture.io",
-                    StartUtc = todayUtc.AddHours(13).AddMinutes(0),
-                    EndUtc = todayUtc.AddHours(14).AddMinutes(30),
+                    StartUtc = todayBaseUtc.AddHours(9).AddMinutes(0),
+                    EndUtc = todayBaseUtc.AddHours(10).AddMinutes(30),
                     Status = "Confirmed",
                     Version = Guid.NewGuid(),
                     OwnerToken = Guid.NewGuid(),
@@ -81,8 +71,32 @@ public static class DbSeeder
                     ResourceId = horizon.Id,
                     UserName = "Marcus Vance",
                     UserEmail = "m.vance@acme.corp",
-                    StartUtc = todayUtc.AddHours(10).AddMinutes(30),
-                    EndUtc = todayUtc.AddHours(12).AddMinutes(0),
+                    StartUtc = todayBaseUtc.AddHours(10).AddMinutes(30),
+                    EndUtc = todayBaseUtc.AddHours(12).AddMinutes(0),
+                    Status = "Confirmed",
+                    Version = Guid.NewGuid(),
+                    OwnerToken = Guid.NewGuid(),
+                    CreatedUtc = DateTime.UtcNow
+                },
+                new()
+                {
+                    ResourceId = rig.Id,
+                    UserName = "David Chen",
+                    UserEmail = "d.chen@media.pro",
+                    StartUtc = todayBaseUtc.AddHours(11).AddMinutes(30),
+                    EndUtc = todayBaseUtc.AddHours(13).AddMinutes(0),
+                    Status = "Confirmed",
+                    Version = Guid.NewGuid(),
+                    OwnerToken = Guid.NewGuid(),
+                    CreatedUtc = DateTime.UtcNow
+                },
+                new()
+                {
+                    ResourceId = apollo.Id,
+                    UserName = "Alex Rivera",
+                    UserEmail = "alex.r@venture.io",
+                    StartUtc = todayBaseUtc.AddHours(13).AddMinutes(0),
+                    EndUtc = todayBaseUtc.AddHours(14).AddMinutes(30),
                     Status = "Confirmed",
                     Version = Guid.NewGuid(),
                     OwnerToken = Guid.NewGuid(),
@@ -93,8 +107,8 @@ public static class DbSeeder
                     ResourceId = lab.Id,
                     UserName = "Dr. Elena Rostova",
                     UserEmail = "e.rostova@quantum.edu",
-                    StartUtc = todayUtc.AddHours(14).AddMinutes(0),
-                    EndUtc = todayUtc.AddHours(16).AddMinutes(30),
+                    StartUtc = todayBaseUtc.AddHours(15).AddMinutes(0),
+                    EndUtc = todayBaseUtc.AddHours(17).AddMinutes(30),
                     Status = "Confirmed",
                     Version = Guid.NewGuid(),
                     OwnerToken = Guid.NewGuid(),

@@ -12,7 +12,7 @@ import puppeteer from 'puppeteer-core';
   await page.goto('http://localhost:5000', { waitUntil: 'networkidle0' });
 
   // 1. Capture main calendar
-  await page.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/9ba98405-4c7f-487b-9950-1c91cf6f588d/calendar_screenshot.png' });
+  await page.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/938952eb-f1b1-4f5f-8097-1e8fa08cbe2a/calendar_screenshot.png' });
   console.log('Saved main calendar screenshot.');
 
   // 2. Open Live Conflict Demo
@@ -32,7 +32,7 @@ import puppeteer from 'puppeteer-core';
   await new Promise(r => setTimeout(r, 600));
 
   // Capture Live Conflict Demo screenshot
-  await page.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/9ba98405-4c7f-487b-9950-1c91cf6f588d/conflict_demo_screenshot.png' });
+  await page.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/938952eb-f1b1-4f5f-8097-1e8fa08cbe2a/conflict_demo_screenshot.png' });
   console.log('Saved conflict demo screenshot.');
 
   // 3. Close demo modal and open booking details modal
@@ -45,7 +45,7 @@ import puppeteer from 'puppeteer-core';
     await bookingChip.click();
     await page.waitForSelector('#detailsBookingModal.active');
     await new Promise(r => setTimeout(r, 400));
-    await page.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/9ba98405-4c7f-487b-9950-1c91cf6f588d/booking_details_screenshot.png' });
+    await page.screenshot({ path: '/Users/kameshwaranrajamani/.gemini/antigravity-ide/brain/938952eb-f1b1-4f5f-8097-1e8fa08cbe2a/booking_details_screenshot.png' });
     console.log('Saved booking details modal screenshot.');
   }
 
